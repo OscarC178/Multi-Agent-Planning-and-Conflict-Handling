@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debate Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              natural: {
+                50: '#Fdfdfc',
+                100: 'rgb(233, 232, 224)', // Main Light / Background
+                200: '#E0DFD8',           // Interaction Light
+                300: 'rgb(208, 197, 197)', // Borders / Secondary
+                400: '#BDB3B3',
+                500: '#917E7B',
+                600: 'rgb(102, 75, 71)',   // Main Dark / Primary Action
+                700: '#523C39',
+                800: '#3D2D2A',
+                900: '#291E1C',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: rgb(233, 232, 224); /* natural-100 */
+        color: rgb(102, 75, 71); /* natural-600 */
+      }
+      /* Custom scrollbar for chat */
+      .scrollbar-thin::-webkit-scrollbar {
+        width: 6px;
+      }
+      .scrollbar-thin::-webkit-scrollbar-track {
+        background: rgb(233, 232, 224);
+      }
+      .scrollbar-thin::-webkit-scrollbar-thumb {
+        background: rgb(208, 197, 197);
+        border-radius: 3px;
+      }
+      .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+        background: rgb(102, 75, 71);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
