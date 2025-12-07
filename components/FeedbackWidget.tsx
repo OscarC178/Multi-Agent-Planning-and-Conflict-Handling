@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, Minus, ExternalLink, X } from 'lucide-react';
 
@@ -29,7 +30,7 @@ const FeedbackWidget: React.FC<FeedbackWidgetProps> = ({ isVisible, onClose }) =
   if (!isOpen) {
     return (
       <div 
-        className="fixed bottom-4 right-4 bg-natural-800 text-white p-4 rounded-full shadow-2xl cursor-pointer hover:bg-natural-700 transition-all z-50 flex items-center gap-2 animate-bounce-in"
+        className="fixed bottom-6 right-6 bg-natural-800 text-white p-4 rounded-full shadow-2xl cursor-pointer hover:bg-natural-700 transition-all z-[100] flex items-center gap-2 animate-bounce-in"
         onClick={() => setIsOpen(true)}
       >
         <MessageSquare size={20} />
@@ -40,7 +41,7 @@ const FeedbackWidget: React.FC<FeedbackWidgetProps> = ({ isVisible, onClose }) =
 
   // Modal State
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden border border-natural-300">
         
         {/* Header */}
@@ -98,7 +99,7 @@ const FeedbackWidget: React.FC<FeedbackWidgetProps> = ({ isVisible, onClose }) =
             </a>
             
             <button 
-                onClick={onClose}
+                onClick={() => setIsOpen(false)}
                 className="text-sm text-natural-500 hover:text-natural-800 hover:underline"
             >
                 No thanks, maybe later

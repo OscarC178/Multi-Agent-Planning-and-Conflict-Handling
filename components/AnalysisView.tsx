@@ -24,12 +24,10 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, onReset, onContinue
     { name: 'Gap', value: 100 - result.viabilityScore }
   ];
 
-  // Determine label based on context (hack: infer from battle card content or just use generic if not passed via props, 
-  // but for now "Viability/Deal Prob" covers bases)
   const scoreLabel = "Viability / Deal Probability";
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in pb-12 p-4 md:p-6">
       {/* Header Card */}
       <div className="bg-white rounded-xl border border-natural-300 p-6 shadow-xl flex flex-col md:flex-row gap-6 items-center">
         <div className="flex-1">

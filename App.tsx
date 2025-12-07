@@ -9,11 +9,11 @@ import FeedbackWidget from './components/FeedbackWidget';
 import AdminDashboard from './components/AdminDashboard';
 import { AppStage, ProductContext, DebateConfig, Message, AnalysisResult, SavedSession } from './types';
 import { generateProponentResponse, generateOpponentResponse, generateAnalysis, generateModeratorIntervention } from './services/geminiService';
+import { logAction } from './services/loggingService';
 import { BrainCircuit, Menu, X, FileText, Activity } from 'lucide-react';
 import { PROPONENT_PERSONAS, SCENARIOS } from './constants';
 
 const STORAGE_KEY = 'velox_debate_history';
-// const API_KEY_STORAGE = 'velox_api_key'; // API Key handled by environment or hidden state
 
 const App: React.FC = () => {
   // Navigation State
@@ -28,8 +28,6 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [typingRole, setTypingRole] = useState<'proponent' | 'opponent' | 'verifier' | 'moderator'>('proponent');
   
-  // API Key State (Hidden logic)
-  // We assume process.env.API_KEY is available.
   const [apiKey] = useState(''); 
 
   // Pause & Interjection State
@@ -50,6 +48,7 @@ const App: React.FC = () => {
 
   // Refs
   const messagesRef = useRef<Message[]>([]);
+  const sessionGuid = useRef<string>(Date.now().toString());
 
   // Load history on mount
   useEffect(() => {
@@ -63,11 +62,17 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Responsive sidebar: Close sidebar by default on mobile on mount
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, []);
+
   const togglePause = () => {
       if (stage !== AppStage.DEBATING) return;
       
       if (isPaused) {
-          // Resume
           setIsPaused(false);
           pausedRef.current = false;
           if (resumeFuncRef.current) {
@@ -75,7 +80,6 @@ const App: React.FC = () => {
               resumeFuncRef.current = null;
           }
       } else {
-          // Pause
           setIsPaused(true);
           pausedRef.current = true;
       }
@@ -83,13 +87,12 @@ const App: React.FC = () => {
 
   const handleInterjection = (text: string) => {
       addMessage('user', 'User (Admin)', text);
-      // Resume after interjection
+      logAction(sessionGuid.current, 'INTERJECTION', { text });
       if (isPaused) {
           togglePause();
       }
   };
 
-  // Async helper to wait if paused
   const checkPauseParams = async () => {
     if (pausedRef.current) {
         await new Promise<void>((resolve) => {
@@ -105,7 +108,7 @@ const App: React.FC = () => {
     cfg: DebateConfig
   ) => {
     const newSession: SavedSession = {
-      id: Date.now().toString(),
+      id: sessionGuid.current,
       timestamp: Date.now(),
       productName: ctx.productName,
       opponentName: cfg.opponent.name,
@@ -134,7 +137,6 @@ const App: React.FC = () => {
   const loadSession = (session: SavedSession) => {
     setContext(session.context);
     
-    // Backward compatibility for old sessions without proponent/scenario in config
     const safeConfig = {
         ...session.config,
         proponent: session.config.proponent || PROPONENT_PERSONAS[0],
@@ -146,11 +148,11 @@ const App: React.FC = () => {
     messagesRef.current = session.messages;
     setAnalysis(session.analysis);
     setCurrentSessionId(session.id);
+    sessionGuid.current = session.id; // Restore session ID for logs
     setStage(AppStage.COMPLETE);
     setCompleteViewMode('verdict');
-    setView('app'); // Ensure we leave landing page
+    setView('app');
     
-    // On mobile, close sidebar after selection
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
@@ -170,6 +172,9 @@ const App: React.FC = () => {
       messagesRef.current = updated;
       return updated;
     });
+    
+    // Log the message
+    logAction(sessionGuid.current, 'MESSAGE', { role, author, contentLength: content.length, snippet: content.substring(0, 50) });
   };
 
   const handleStartDebate = async (productContext: ProductContext, debateConfig: DebateConfig) => {
@@ -183,10 +188,19 @@ const App: React.FC = () => {
     setIsProcessing(true);
     setMessages([]);
     messagesRef.current = [];
+    sessionGuid.current = Date.now().toString(); // New Session ID
     setCurrentSessionId(null);
     setIsPaused(false);
     pausedRef.current = false;
     setShowFeedback(false);
+
+    // LOG START
+    logAction(sessionGuid.current, 'START_SIMULATION', { 
+        scenario: debateConfig.scenario.id,
+        context: productContext.productName,
+        opponent: debateConfig.opponent.name,
+        full_description: productContext.productDescription
+    });
 
     await runSimulation(productContext, debateConfig, debateConfig.rounds);
   };
@@ -196,6 +210,7 @@ const App: React.FC = () => {
 
     if (evidence.trim()) {
         addMessage('user', 'User (Admin) - New Evidence', evidence);
+        logAction(sessionGuid.current, 'CONTINUE_WITH_EVIDENCE', { evidence });
     }
 
     setStage(AppStage.DEBATING);
@@ -204,7 +219,6 @@ const App: React.FC = () => {
     pausedRef.current = false;
     setShowFeedback(false);
     
-    // Run for 2 extra rounds
     await runSimulation(context, config, 2);
   };
 
@@ -214,7 +228,6 @@ const App: React.FC = () => {
 
       for (let i = 0; i < roundsToRun; i++) {
         
-        // --- TURN A: Proponent ---
         await checkPauseParams();
         setTypingRole('proponent');
         await new Promise(r => setTimeout(r, 800));
@@ -231,7 +244,6 @@ const App: React.FC = () => {
         );
         addMessage('proponent', cfg.proponent.name, propResponse);
 
-        // --- TURN B: Opponent ---
         await checkPauseParams();
         setTypingRole('opponent');
         await new Promise(r => setTimeout(r, 1200));
@@ -247,22 +259,18 @@ const App: React.FC = () => {
         );
         addMessage('opponent', cfg.opponent.name, oppResponse);
 
-        // --- TURN C: Moderator Check ---
         await checkPauseParams();
         setTypingRole('moderator');
-        // Small delay to simulate "checking"
         await new Promise(r => setTimeout(r, 800));
         await checkPauseParams();
 
         const modResult = await generateModeratorIntervention(ctx, messagesRef.current, cfg.model, keyToUse);
         if (modResult) {
             addMessage('moderator', 'The Moderator', modResult.text, modResult.groundingMetadata);
-            // If moderator intervened, give user a chance to read it (short delay)
             await new Promise(r => setTimeout(r, 1500));
         }
       }
 
-      // --- CLOSING ---
       await checkPauseParams();
       setTypingRole('proponent');
       await new Promise(r => setTimeout(r, 800));
@@ -279,17 +287,17 @@ const App: React.FC = () => {
       );
       addMessage('proponent', `${cfg.proponent.name} (Closing)`, closing);
 
-      // --- VERDICT ---
       setStage(AppStage.ANALYZING);
       setTypingRole('verifier');
       
       const result = await generateAnalysis(ctx, messagesRef.current, cfg.model, keyToUse);
       setAnalysis(result);
       
+      logAction(sessionGuid.current, 'ANALYSIS_COMPLETE', { score: result.viabilityScore });
+      
       saveSession(messagesRef.current, result, ctx, cfg);
       setStage(AppStage.COMPLETE);
       
-      // Trigger Feedback Widget
       setShowFeedback(true);
 
     } catch (error) {
@@ -315,24 +323,42 @@ const App: React.FC = () => {
     setShowFeedback(false);
   };
 
-  if (view === 'landing') {
-    return <LandingPage onStart={() => setView('app')} onAdmin={() => setView('admin')} />;
-  }
+  // Helper to determine if we are in "Full Screen" mode (Debating OR Complete)
+  // We use this to remove padding on mobile for an immersive experience
+  const isFullScreenMode = (view === 'app') && (stage === AppStage.DEBATING || stage === AppStage.COMPLETE);
 
-  if (view === 'admin') {
-    return <AdminDashboard onBack={() => setView('landing')} />;
-  }
-
+  // We now wrap everything in the main shell to ensure Sidebar is always accessible
   return (
-    <div className="h-screen bg-natural-100 text-natural-900 flex font-sans selection:bg-natural-200 selection:text-natural-900 overflow-hidden">
+    <div className="h-[100dvh] bg-natural-100 text-natural-900 flex font-sans selection:bg-natural-200 selection:text-natural-900 overflow-hidden">
       
-      {/* Sidebar - Desktop */}
+      {/* Sidebar - Mobile Overlay */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out md:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+         <HistorySidebar 
+            sessions={history}
+            currentSessionId={currentSessionId}
+            onSelectSession={loadSession}
+            onNewSession={() => { handleReset(); setView('app'); setSidebarOpen(false); }}
+            onDeleteSession={deleteSession}
+            onClose={() => setSidebarOpen(false)}
+            className="h-full w-full"
+         />
+      </div>
+      
+      {/* Mobile Sidebar Backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Desktop Push */}
       <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 ease-in-out border-r border-natural-300 flex-shrink-0 hidden md:block overflow-hidden`}>
          <HistorySidebar 
             sessions={history}
             currentSessionId={currentSessionId}
             onSelectSession={loadSession}
-            onNewSession={handleReset}
+            onNewSession={() => { handleReset(); setView('app'); }}
             onDeleteSession={deleteSession}
             className="h-full w-80"
          />
@@ -341,14 +367,14 @@ const App: React.FC = () => {
       {/* Main Column */}
       <div className="flex-1 flex flex-col h-full min-w-0 relative">
         
-        {/* Header */}
+        {/* Header - Always visible to ensure Sidebar toggle is accessible */}
         <header className="bg-white border-b border-natural-300 flex-shrink-0 z-20 shadow-sm">
-          <div className="px-6 h-16 flex items-center justify-between gap-4">
+          <div className="px-4 md:px-6 h-16 flex items-center justify-between gap-4">
             
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 hover:bg-natural-100 rounded-lg text-natural-600"
+                className="p-2 hover:bg-natural-100 rounded-lg text-natural-600 focus:outline-none focus:ring-2 focus:ring-natural-300"
               >
                 {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
@@ -361,119 +387,135 @@ const App: React.FC = () => {
                     <BrainCircuit className="text-white" size={18} />
                 </div>
                 <h1 className="text-lg font-bold text-natural-800 hidden lg:block">
-                    Debate Planner
+                    The Green Room
                 </h1>
               </button>
             </div>
-
-            {/* API Key Input Removed from Header */}
             
-            <div className="flex items-center gap-4 text-sm text-natural-600 ml-auto">
-              <span className={`hidden sm:block px-2 py-1 rounded border ${stage === AppStage.SETUP ? 'border-natural-600 text-natural-900 bg-natural-200' : 'border-natural-300'}`}>1. Setup</span>
-              <span className="hidden sm:block text-natural-300">→</span>
-              <span className={`px-2 py-1 rounded border ${stage === AppStage.DEBATING ? 'border-natural-600 text-natural-900 bg-natural-200' : 'border-natural-300'}`}>2. Sim</span>
-              <span className="hidden sm:block text-natural-300">→</span>
-              <span className={`px-2 py-1 rounded border ${stage === AppStage.COMPLETE ? 'border-natural-600 text-natural-900 bg-natural-200' : 'border-natural-300'}`}>3. Verdict</span>
-            </div>
+            {view === 'app' && (
+                <div className="flex items-center gap-4 text-sm text-natural-600 ml-auto">
+                    <span className={`hidden sm:block px-2 py-1 rounded border ${stage === AppStage.SETUP ? 'border-natural-600 text-natural-900 bg-natural-200' : 'border-natural-300'}`}>1. Setup</span>
+                    <span className="hidden sm:block text-natural-300">→</span>
+                    <span className={`px-2 py-1 rounded border ${stage === AppStage.DEBATING ? 'border-natural-600 text-natural-900 bg-natural-200' : 'border-natural-300'}`}>2. Sim</span>
+                    <span className="hidden sm:block text-natural-300">→</span>
+                    <span className={`px-2 py-1 rounded border ${stage === AppStage.COMPLETE ? 'border-natural-600 text-natural-900 bg-natural-200' : 'border-natural-300'}`}>3. Verdict</span>
+                </div>
+            )}
           </div>
         </header>
 
         {/* Scrollable Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-natural-100 relative">
+        <main className={`flex-1 relative flex flex-col ${isFullScreenMode ? 'overflow-hidden bg-white md:bg-natural-100' : 'overflow-y-auto bg-natural-100'}`}>
           
-          <div className="max-w-6xl mx-auto h-full flex flex-col">
+          <div className={`h-full flex flex-col ${isFullScreenMode ? 'max-w-full' : 'max-w-6xl mx-auto w-full'} ${!isFullScreenMode && view !== 'landing' ? 'p-4 md:p-8' : ''}`}>
             
-            {stage === AppStage.SETUP && (
-              <div className="flex flex-col items-center justify-center flex-1">
-                <SetupForm onStart={handleStartDebate} isProcessing={isProcessing} />
-              </div>
-            )}
-
-            {stage === AppStage.DEBATING && (
-              <div className="w-full flex flex-col items-center animate-fade-in flex-1">
-                <div className="mb-6 text-center">
-                    <h2 className="text-2xl font-bold text-natural-800 mb-2">Simulation In Progress</h2>
-                    <p className="text-natural-600">
-                      Scenario: <span className="text-natural-900 font-bold">{config?.scenario.label}</span>
-                    </p>
-                    <p className="text-natural-500 text-sm mt-1">
-                       <span className="text-emerald-700 font-medium">{context?.productName}</span> vs. <span className="text-rose-700 font-medium">{config?.opponent.name}</span>
-                    </p>
+            {view === 'landing' && (
+                <div className="h-full w-full">
+                    <LandingPage onStart={() => setView('app')} onAdmin={() => setView('admin')} />
                 </div>
-                <DebateTranscript 
-                    messages={messages} 
-                    isTyping={true} 
-                    typingRole={typingRole}
-                    isPaused={isPaused}
-                    onTogglePause={togglePause}
-                    onInterject={handleInterjection}
-                />
-              </div>
             )}
 
-            {stage === AppStage.ANALYZING && (
-              <div className="flex flex-col items-center justify-center space-y-8 animate-pulse flex-1">
-                <div className="w-24 h-24 rounded-full border-4 border-natural-600 border-t-transparent animate-spin"></div>
-                <h2 className="text-3xl font-bold text-natural-800">Synthesizing Verdict...</h2>
-                <p className="text-natural-500 text-lg">The Judge is reviewing the transcript.</p>
-              </div>
-            )}
-
-            {stage === AppStage.COMPLETE && analysis && (
-              <div className="flex flex-col gap-6 animate-fade-in pb-20">
-                
-                {/* View Toggles for Complete Stage */}
-                <div className="flex justify-center mb-2">
-                   <div className="bg-white p-1 rounded-lg flex border border-natural-300 shadow-sm">
-                      <button
-                        onClick={() => setCompleteViewMode('verdict')}
-                        className={`px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
-                            completeViewMode === 'verdict' 
-                            ? 'bg-natural-200 text-natural-900 shadow-sm' 
-                            : 'text-natural-600 hover:text-natural-800'
-                        }`}
-                      >
-                         <Activity size={16} /> Verdict
-                      </button>
-                      <button
-                        onClick={() => setCompleteViewMode('transcript')}
-                        className={`px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
-                            completeViewMode === 'transcript' 
-                            ? 'bg-natural-200 text-natural-900 shadow-sm' 
-                            : 'text-natural-600 hover:text-natural-800'
-                        }`}
-                      >
-                         <FileText size={16} /> Transcript
-                      </button>
-                   </div>
+            {view === 'admin' && (
+                <div className="h-full w-full p-4 md:p-8 flex items-center justify-center">
+                    <AdminDashboard onBack={() => setView('landing')} />
                 </div>
-
-                {completeViewMode === 'verdict' ? (
-                    <AnalysisView 
-                      result={analysis} 
-                      onReset={handleReset} 
-                      onContinue={handleContinueDebate}
-                    />
-                ) : (
-                    <div className="w-full flex flex-col items-center">
-                       <DebateTranscript 
-                          messages={messages} 
-                          isTyping={false}
-                          isPaused={false}
-                          onTogglePause={() => {}}
-                          onInterject={() => {}}
-                       />
-                    </div>
-                )}
-              </div>
             )}
+
+            {view === 'app' && (
+                <>
+                    {stage === AppStage.SETUP && (
+                        <div className="flex flex-col items-center justify-center flex-1">
+                            <SetupForm onStart={handleStartDebate} isProcessing={isProcessing} />
+                        </div>
+                    )}
+
+                    {stage === AppStage.DEBATING && (
+                        <div className="w-full flex flex-col items-center animate-fade-in flex-1 h-full">
+                            <div className="hidden md:block mb-4 text-center mt-4">
+                                <h2 className="text-2xl font-bold text-natural-800 mb-2">Simulation In Progress</h2>
+                                <p className="text-natural-500 text-sm mt-1">
+                                <span className="text-emerald-700 font-medium">{context?.productName}</span> vs. <span className="text-rose-700 font-medium">{config?.opponent.name}</span>
+                                </p>
+                            </div>
+                            
+                            <DebateTranscript 
+                                messages={messages} 
+                                isTyping={true} 
+                                typingRole={typingRole}
+                                isPaused={isPaused}
+                                onTogglePause={togglePause}
+                                onInterject={handleInterjection}
+                            />
+                        </div>
+                    )}
+
+                    {stage === AppStage.ANALYZING && (
+                        <div className="flex flex-col items-center justify-center space-y-8 animate-pulse flex-1 p-8">
+                            <div className="w-24 h-24 rounded-full border-4 border-natural-600 border-t-transparent animate-spin"></div>
+                            <h2 className="text-3xl font-bold text-natural-800 text-center">Synthesizing Verdict...</h2>
+                            <p className="text-natural-500 text-lg text-center">The Judge is reviewing the transcript.</p>
+                        </div>
+                    )}
+
+                    {stage === AppStage.COMPLETE && analysis && (
+                        <div className={`flex flex-col gap-6 animate-fade-in ${isFullScreenMode ? 'h-full' : 'pb-20'}`}>
+                            
+                            {/* View Toggles for Complete Stage */}
+                            <div className={`flex justify-center ${isFullScreenMode ? 'p-2 border-b border-natural-200 bg-white' : 'mb-2'}`}>
+                                <div className="bg-white p-1 rounded-lg flex border border-natural-300 shadow-sm">
+                                    <button
+                                        onClick={() => setCompleteViewMode('verdict')}
+                                        className={`px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
+                                            completeViewMode === 'verdict' 
+                                            ? 'bg-natural-200 text-natural-900 shadow-sm' 
+                                            : 'text-natural-600 hover:text-natural-800'
+                                        }`}
+                                    >
+                                        <Activity size={16} /> Verdict
+                                    </button>
+                                    <button
+                                        onClick={() => setCompleteViewMode('transcript')}
+                                        className={`px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
+                                            completeViewMode === 'transcript' 
+                                            ? 'bg-natural-200 text-natural-900 shadow-sm' 
+                                            : 'text-natural-600 hover:text-natural-800'
+                                        }`}
+                                    >
+                                        <FileText size={16} /> Transcript
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto scrollbar-thin">
+                                {completeViewMode === 'verdict' ? (
+                                    <AnalysisView 
+                                    result={analysis} 
+                                    onReset={handleReset} 
+                                    onContinue={handleContinueDebate}
+                                    />
+                                ) : (
+                                    <div className="w-full flex flex-col items-center h-full">
+                                    <DebateTranscript 
+                                        messages={messages} 
+                                        isTyping={false}
+                                        isPaused={false}
+                                        onTogglePause={() => {}}
+                                        onInterject={() => {}}
+                                    />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
           </div>
         </main>
-        
-        {/* Feedback Widget */}
-        <FeedbackWidget isVisible={showFeedback} onClose={() => setShowFeedback(false)} />
-        
       </div>
+
+      {/* Feedback Widget moved to root level to avoid overflow clipping */}
+      <FeedbackWidget isVisible={showFeedback} onClose={() => setShowFeedback(false)} />
     </div>
   );
 };

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../types';
 import { Bot, User, ShieldAlert, Scale, Send, Play, Pause, ExternalLink } from 'lucide-react';
@@ -62,10 +63,10 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
   const isRightAligned = (role: string) => role === 'opponent' || role === 'user';
 
   return (
-    <div className="relative flex flex-col h-[600px] w-full max-w-4xl mx-auto bg-white rounded-xl border border-natural-300 shadow-xl overflow-hidden">
+    <div className="relative flex flex-col flex-1 h-full w-full max-w-4xl mx-auto bg-white md:rounded-xl border-x md:border-y border-natural-300 shadow-xl overflow-hidden">
       
       {/* Header */}
-      <div className="bg-white p-4 border-b border-natural-300 flex justify-between items-center shadow-sm z-10">
+      <div className="bg-white p-4 border-b border-natural-300 flex justify-between items-center shadow-sm z-10 shrink-0">
         <h3 className="text-lg font-semibold text-natural-800 flex items-center gap-2">
           {isPaused ? (
              <span className="w-2 h-2 rounded-full bg-amber-500 animate-none"></span>
@@ -88,21 +89,21 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin bg-natural-50/50">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 scrollbar-thin bg-natural-50/50">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex gap-4 ${isRightAligned(msg.role) ? 'flex-row-reverse' : 'flex-row'}`}
+            className={`flex gap-3 md:gap-4 ${isRightAligned(msg.role) ? 'flex-row-reverse' : 'flex-row'}`}
           >
             {getAvatar(msg.role)}
             
-            <div className={`flex flex-col max-w-[80%] ${isRightAligned(msg.role) ? 'items-end' : 'items-start'}`}>
+            <div className={`flex flex-col max-w-[85%] md:max-w-[80%] ${isRightAligned(msg.role) ? 'items-end' : 'items-start'}`}>
               <span className="text-xs text-natural-500 mb-1 px-1 flex items-center gap-2 font-medium">
                 {msg.role === 'moderator' && <Scale size={12} className="text-amber-500"/>}
                 {msg.author}
               </span>
               
-              <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${getBubbleStyle(msg.role)}`}>
+              <div className={`p-3 md:p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${getBubbleStyle(msg.role)}`}>
                 {msg.content}
 
                 {/* Grounding / Citations */}
@@ -149,17 +150,17 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
 
       {/* Interjection Input (Visible when Paused) */}
       {isPaused && (
-        <div className="p-4 bg-white border-t border-natural-300 animate-fade-in-up">
+        <div className="p-4 bg-white border-t border-natural-300 animate-fade-in-up shrink-0">
            <form onSubmit={handleSubmitInterjection} className="relative">
               <label className="block text-xs text-natural-700 mb-1 font-medium">
-                 Interject as Admin (Adds context to the debate):
+                 Interject as Admin (Adds context):
               </label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
                   value={interjectionText}
                   onChange={(e) => setInterjectionText(e.target.value)}
-                  placeholder="e.g. 'Assume we have zero budget' or 'The user is non-technical'..."
+                  placeholder="e.g. 'Assume we have zero budget'..."
                   className="flex-1 bg-white border border-natural-300 rounded-lg px-4 py-2 text-natural-800 text-sm focus:ring-1 focus:ring-natural-600 outline-none shadow-inner"
                   autoFocus
                 />
@@ -167,7 +168,7 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
                    type="submit"
                    className="bg-natural-600 hover:bg-natural-500 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors shadow-sm"
                 >
-                  <Send size={16} /> Send & Resume
+                  <Send size={16} /> <span className="hidden md:inline">Send & Resume</span> <span className="md:hidden">Send</span>
                 </button>
               </div>
            </form>

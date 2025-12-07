@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { SavedSession } from '../types';
-import { MessageSquare, Plus, Trash2, Clock, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Clock, X } from 'lucide-react';
 
 interface HistorySidebarProps {
   sessions: SavedSession[];
@@ -8,6 +9,7 @@ interface HistorySidebarProps {
   onSelectSession: (session: SavedSession) => void;
   onNewSession: () => void;
   onDeleteSession: (id: string, e: React.MouseEvent) => void;
+  onClose?: () => void; // New prop for closing on mobile
   className?: string;
 }
 
@@ -17,6 +19,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
   onSelectSession,
   onNewSession,
   onDeleteSession,
+  onClose,
   className
 }) => {
   const formatDate = (timestamp: number) => {
@@ -30,13 +33,24 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
 
   return (
     <div className={`flex flex-col bg-white border-r border-natural-300 h-full ${className}`}>
-      <div className="p-4 border-b border-natural-300">
+      
+      {/* Sidebar Header with Close Button for Mobile */}
+      <div className="p-4 border-b border-natural-300 flex items-center gap-2">
         <button
           onClick={onNewSession}
-          className="w-full flex items-center justify-center gap-2 bg-white hover:bg-natural-50 border border-natural-300 text-natural-700 py-2 px-4 rounded-lg transition-colors font-medium text-sm shadow-sm"
+          className="flex-1 flex items-center justify-center gap-2 bg-white hover:bg-natural-50 border border-natural-300 text-natural-700 py-2 px-3 rounded-lg transition-colors font-medium text-sm shadow-sm whitespace-nowrap"
         >
           <Plus size={16} /> New Debate
         </button>
+        {onClose && (
+            <button 
+                onClick={onClose}
+                className="md:hidden p-2 text-natural-500 hover:bg-natural-100 rounded-lg"
+                title="Close Sidebar"
+            >
+                <X size={20} />
+            </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-2">

@@ -1,7 +1,8 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { ProductContext, DebateConfig, OpponentPersona, ProponentPersona, AIModel, Scenario, Attachment } from '../types';
 import { OPPONENT_PERSONAS, PROPONENT_PERSONAS, DEFAULT_ROUNDS, AVAILABLE_MODELS, SCENARIOS } from '../constants';
-import { Settings, Play, UserCircle, AlignLeft, Info, AlertCircle, Users, Building2, Globe, Target, Paperclip, X, Sparkles } from 'lucide-react';
+import { Settings, Play, UserCircle, AlignLeft, Info, AlertCircle, Users, Building2, Globe, Target, Paperclip, X, Sparkles, BrainCircuit } from 'lucide-react';
 
 interface SetupFormProps {
   onStart: (context: ProductContext, config: DebateConfig) => void;
@@ -24,8 +25,9 @@ const SetupForm: React.FC<SetupFormProps> = ({ onStart, isProcessing }) => {
   const [selectedOpponent, setSelectedOpponent] = useState<OpponentPersona | null>(null);
   const [showOpponentInfo, setShowOpponentInfo] = useState(false);
 
-  // Hardcoded to Gemini 3 Pro (Beta requirement)
-  const [selectedModel] = useState<AIModel>(AVAILABLE_MODELS[0]);
+  // Model Selection (Default to Flash as requested)
+  // Index 1 is usually Gemini 2.5 Flash in constants
+  const [selectedModel, setSelectedModel] = useState<AIModel>(AVAILABLE_MODELS[1] || AVAILABLE_MODELS[0]);
   
   const [rounds, setRounds] = useState(DEFAULT_ROUNDS);
   const [showInfo, setShowInfo] = useState(false);
@@ -141,10 +143,10 @@ const SetupForm: React.FC<SetupFormProps> = ({ onStart, isProcessing }) => {
             </h2>
             <p className="text-natural-500 mt-1">Define the context and choose your adversarial team.</p>
         </div>
-        {/* Beta Badge - New Requirement */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm">
+        {/* Beta Badge - Dynamic based on model */}
+        <div className="hidden md:flex bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 px-3 py-1.5 rounded-full items-center gap-2 shadow-sm">
             <Sparkles size={14} className="text-blue-500" />
-            <span className="text-xs font-semibold text-blue-700">Beta: Powered by Gemini 3 Pro</span>
+            <span className="text-xs font-semibold text-blue-700">Powered by {selectedModel.name}</span>
         </div>
       </div>
       
@@ -263,8 +265,30 @@ const SetupForm: React.FC<SetupFormProps> = ({ onStart, isProcessing }) => {
           </div>
         </div>
 
-        {/* HIDDEN: Model Selection (Hardcoded to Gemini 3 Pro) */}
-        {/* <div className="hidden">...</div> */}
+        {/* Model Selection - RESTORED */}
+        <div className="pt-2 border-t border-natural-300">
+           <label className="block text-sm font-medium text-natural-700 mb-2 flex items-center gap-2">
+             <BrainCircuit size={16} /> Intelligence Model
+           </label>
+           <div className="grid grid-cols-2 gap-3">
+             {AVAILABLE_MODELS.map((model) => (
+               <div
+                 key={model.id}
+                 onClick={() => setSelectedModel(model)}
+                 className={`cursor-pointer px-3 py-2 rounded-lg border flex items-center gap-2 transition-all ${
+                   selectedModel.id === model.id
+                     ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 text-blue-900'
+                     : 'bg-white border-natural-300 text-natural-600 hover:bg-natural-50'
+                 }`}
+               >
+                 <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${selectedModel.id === model.id ? 'border-blue-500' : 'border-natural-400'}`}>
+                    {selectedModel.id === model.id && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+                 </div>
+                 <span className="text-sm font-medium">{model.name}</span>
+               </div>
+             ))}
+           </div>
+        </div>
 
         {/* Agent Selection Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
