@@ -9,6 +9,7 @@ interface DebateTranscriptProps {
   typingRole?: 'proponent' | 'opponent' | 'verifier' | 'moderator';
   isPaused: boolean;
   onTogglePause: () => void;
+  onEndDebate?: () => void;
   onInterject: (text: string) => void;
 }
 
@@ -18,6 +19,7 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
   typingRole, 
   isPaused, 
   onTogglePause,
+  onEndDebate,
   onInterject
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -33,6 +35,46 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
       onInterject(interjectionText);
       setInterjectionText('');
     }
+  };
+
+  // --- TEXT FORMATTING HELPER ---
+  // Parses raw text to render Bold (**text**), Lists (- item), and Paragraphs
+  const formatMessageContent = (content: string) => {
+    // Split by newlines to handle paragraphs/lists
+    const lines = content.split('\n');
+
+    return lines.map((line, index) => {
+      // Skip empty lines but render a spacer
+      if (!line.trim()) {
+        return <div key={index} className="h-2" />;
+      }
+
+      // Detect List Items (Bullet points or Numbered lists)
+      const isListItem = /^(-|\*|\d+\.)\s/.test(line);
+      
+      // Parse Bold Syntax: **bold**
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      
+      const formattedLine = parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-bold text-natural-900">{part.slice(2, -2)}</strong>;
+        }
+        return <span key={i}>{part}</span>;
+      });
+
+      return (
+        <div 
+          key={index} 
+          className={`
+            ${isListItem ? 'pl-4 mb-1' : 'mb-3 last:mb-0'} 
+            ${isListItem ? 'text-natural-800' : 'text-natural-700'}
+            leading-relaxed whitespace-pre-wrap
+          `}
+        >
+          {formattedLine}
+        </div>
+      );
+    });
   };
 
   const getAvatar = (role: string) => {
@@ -76,16 +118,27 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
           {isPaused ? 'Simulation Paused' : 'Live Debate Feed'}
         </h3>
         
-        <button 
-          onClick={onTogglePause}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-             isPaused 
-               ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
-               : 'bg-white hover:bg-natural-50 text-natural-700 border border-natural-300'
-          }`}
-        >
-          {isPaused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}
-        </button>
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={onTogglePause}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    isPaused 
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
+                    : 'bg-white hover:bg-natural-50 text-natural-700 border border-natural-300'
+                }`}
+            >
+                {isPaused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}
+            </button>
+            
+            {onEndDebate && (
+                <button
+                    onClick={onEndDebate}
+                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                >
+                    Finish Early
+                </button>
+            )}
+        </div>
       </div>
 
       {/* Messages Area */}
@@ -97,14 +150,16 @@ const DebateTranscript: React.FC<DebateTranscriptProps> = ({
           >
             {getAvatar(msg.role)}
             
-            <div className={`flex flex-col max-w-[85%] md:max-w-[80%] ${isRightAligned(msg.role) ? 'items-end' : 'items-start'}`}>
+            <div className={`flex flex-col max-w-[90%] md:max-w-[85%] ${isRightAligned(msg.role) ? 'items-end' : 'items-start'}`}>
               <span className="text-xs text-natural-500 mb-1 px-1 flex items-center gap-2 font-medium">
                 {msg.role === 'moderator' && <Scale size={12} className="text-amber-500"/>}
                 {msg.author}
               </span>
               
-              <div className={`p-3 md:p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${getBubbleStyle(msg.role)}`}>
-                {msg.content}
+              <div className={`p-4 rounded-2xl text-sm shadow-sm ${getBubbleStyle(msg.role)}`}>
+                
+                {/* Render Formatted Content */}
+                {formatMessageContent(msg.content)}
 
                 {/* Grounding / Citations */}
                 {msg.groundingMetadata?.groundingChunks && msg.groundingMetadata.groundingChunks.length > 0 && (

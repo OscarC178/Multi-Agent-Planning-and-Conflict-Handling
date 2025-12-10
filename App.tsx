@@ -9,7 +9,7 @@ import FeedbackWidget from './components/FeedbackWidget';
 import AdminDashboard from './components/AdminDashboard';
 import { AppStage, ProductContext, DebateConfig, Message, AnalysisResult, SavedSession } from './types';
 import { generateProponentResponse, generateOpponentResponse, generateAnalysis, generateModeratorIntervention } from './services/geminiService';
-import { logAction } from './services/loggingService';
+import { logAction, logSessionComplete } from './services/loggingService';
 import { BrainCircuit, Menu, X, FileText, Activity } from 'lucide-react';
 import { PROPONENT_PERSONAS, SCENARIOS } from './constants';
 
@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const pausedRef = useRef(false);
   const resumeFuncRef = useRef<(() => void) | null>(null);
+  const isEndedRef = useRef(false);
 
   // History State
   const [history, setHistory] = useState<SavedSession[]>([]);
@@ -46,9 +47,12 @@ const App: React.FC = () => {
   // Feedback State
   const [showFeedback, setShowFeedback] = useState(false);
 
-  // Refs
+  // Refs for Analytics
   const messagesRef = useRef<Message[]>([]);
   const sessionGuid = useRef<string>(Date.now().toString());
+  const startTimeRef = useRef<number>(0);
+  const moderatorInterventionCountRef = useRef<number>(0);
+  const userInterjectedRef = useRef<boolean>(false);
 
   // Load history on mount
   useEffect(() => {
@@ -85,9 +89,18 @@ const App: React.FC = () => {
       }
   };
 
+  const handleEndDebate = () => {
+      isEndedRef.current = true;
+      // If paused, we must resume so the loop can hit the break condition
+      if (pausedRef.current) {
+          togglePause();
+      }
+  };
+
   const handleInterjection = (text: string) => {
       addMessage('user', 'User (Admin)', text);
       logAction(sessionGuid.current, 'INTERJECTION', { text });
+      userInterjectedRef.current = true; // Track for analytics
       if (isPaused) {
           togglePause();
       }
@@ -173,8 +186,9 @@ const App: React.FC = () => {
       return updated;
     });
     
-    // Log the message
-    logAction(sessionGuid.current, 'MESSAGE', { role, author, contentLength: content.length, snippet: content.substring(0, 50) });
+    if (role === 'moderator') {
+        moderatorInterventionCountRef.current += 1;
+    }
   };
 
   const handleStartDebate = async (productContext: ProductContext, debateConfig: DebateConfig) => {
@@ -192,14 +206,17 @@ const App: React.FC = () => {
     setCurrentSessionId(null);
     setIsPaused(false);
     pausedRef.current = false;
+    isEndedRef.current = false;
     setShowFeedback(false);
+    
+    // Reset Analytics Counters
+    startTimeRef.current = Date.now();
+    moderatorInterventionCountRef.current = 0;
+    userInterjectedRef.current = false;
 
-    // LOG START
+    // Log basic start (optional, for real-time tracking)
     logAction(sessionGuid.current, 'START_SIMULATION', { 
-        scenario: debateConfig.scenario.id,
-        context: productContext.productName,
-        opponent: debateConfig.opponent.name,
-        full_description: productContext.productDescription
+        scenario: debateConfig.scenario.id
     });
 
     await runSimulation(productContext, debateConfig, debateConfig.rounds);
@@ -210,13 +227,14 @@ const App: React.FC = () => {
 
     if (evidence.trim()) {
         addMessage('user', 'User (Admin) - New Evidence', evidence);
-        logAction(sessionGuid.current, 'CONTINUE_WITH_EVIDENCE', { evidence });
+        userInterjectedRef.current = true;
     }
 
     setStage(AppStage.DEBATING);
     setIsProcessing(true);
     setIsPaused(false);
     pausedRef.current = false;
+    isEndedRef.current = false;
     setShowFeedback(false);
     
     await runSimulation(context, config, 2);
@@ -228,10 +246,14 @@ const App: React.FC = () => {
 
       for (let i = 0; i < roundsToRun; i++) {
         
+        if (isEndedRef.current) break;
         await checkPauseParams();
+        if (isEndedRef.current) break;
+
         setTypingRole('proponent');
         await new Promise(r => setTimeout(r, 800));
         await checkPauseParams();
+        if (isEndedRef.current) break;
 
         const propResponse = await generateProponentResponse(
             ctx, 
@@ -244,10 +266,14 @@ const App: React.FC = () => {
         );
         addMessage('proponent', cfg.proponent.name, propResponse);
 
+        if (isEndedRef.current) break;
         await checkPauseParams();
+        if (isEndedRef.current) break;
+
         setTypingRole('opponent');
         await new Promise(r => setTimeout(r, 1200));
         await checkPauseParams();
+        if (isEndedRef.current) break;
 
         const oppResponse = await generateOpponentResponse(
             ctx, 
@@ -259,10 +285,14 @@ const App: React.FC = () => {
         );
         addMessage('opponent', cfg.opponent.name, oppResponse);
 
+        if (isEndedRef.current) break;
         await checkPauseParams();
+        if (isEndedRef.current) break;
+
         setTypingRole('moderator');
         await new Promise(r => setTimeout(r, 800));
         await checkPauseParams();
+        if (isEndedRef.current) break;
 
         const modResult = await generateModeratorIntervention(ctx, messagesRef.current, cfg.model, keyToUse);
         if (modResult) {
@@ -271,21 +301,27 @@ const App: React.FC = () => {
         }
       }
 
-      await checkPauseParams();
-      setTypingRole('proponent');
-      await new Promise(r => setTimeout(r, 800));
+      // Final Check before closing
       await checkPauseParams();
       
-      const closing = await generateProponentResponse(
-          ctx, 
-          messagesRef.current, 
-          cfg.proponent, 
-          cfg.opponent, 
-          cfg.model, 
-          cfg.scenario,
-          keyToUse
-      );
-      addMessage('proponent', `${cfg.proponent.name} (Closing)`, closing);
+      // Closing statement (Skip if ended early to save time, or keep? Let's keep for completeness if not too abrupt)
+      // If manually ended, maybe we skip the closing statement and go straight to analysis to be snappy
+      if (!isEndedRef.current) {
+          setTypingRole('proponent');
+          await new Promise(r => setTimeout(r, 800));
+          await checkPauseParams();
+          
+          const closing = await generateProponentResponse(
+              ctx, 
+              messagesRef.current, 
+              cfg.proponent, 
+              cfg.opponent, 
+              cfg.model, 
+              cfg.scenario,
+              keyToUse
+          );
+          addMessage('proponent', `${cfg.proponent.name} (Closing)`, closing);
+      }
 
       setStage(AppStage.ANALYZING);
       setTypingRole('verifier');
@@ -293,7 +329,31 @@ const App: React.FC = () => {
       const result = await generateAnalysis(ctx, messagesRef.current, cfg.model, keyToUse);
       setAnalysis(result);
       
-      logAction(sessionGuid.current, 'ANALYSIS_COMPLETE', { score: result.viabilityScore });
+      const endTime = Date.now();
+      const durationSeconds = Math.round((endTime - startTimeRef.current) / 1000);
+
+      // --- LOG COMPLETE RICH SESSION DATA ---
+      logSessionComplete({
+          session_id: sessionGuid.current,
+          product_name: ctx.productName,
+          scenario_id: cfg.scenario.label,
+          proponent_name: cfg.proponent.name,
+          opponent_name: cfg.opponent.name,
+          model_used: cfg.model.name,
+          file_count: ctx.files?.length || 0,
+          turn_count: messagesRef.current.length,
+          moderator_count: moderatorInterventionCountRef.current,
+          user_interjected: userInterjectedRef.current,
+          duration_seconds: durationSeconds,
+          viability_score: result.viabilityScore,
+          verdict_summary: result.viabilityReasoning.substring(0, 200) + '...',
+          full_payload: {
+              prompt: ctx.productDescription,
+              messages: messagesRef.current,
+              battleCard: result.battleCard,
+              gaps: result.gaps
+          }
+      });
       
       saveSession(messagesRef.current, result, ctx, cfg);
       setStage(AppStage.COMPLETE);
@@ -308,6 +368,7 @@ const App: React.FC = () => {
       setIsProcessing(false);
       setIsPaused(false);
       pausedRef.current = false;
+      isEndedRef.current = false;
     }
   };
 
@@ -445,6 +506,7 @@ const App: React.FC = () => {
                                 isPaused={isPaused}
                                 onTogglePause={togglePause}
                                 onInterject={handleInterjection}
+                                onEndDebate={handleEndDebate}
                             />
                         </div>
                     )}

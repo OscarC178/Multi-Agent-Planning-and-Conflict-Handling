@@ -1,10 +1,11 @@
 
+
 export type Role = 'user' | 'proponent' | 'opponent' | 'verifier' | 'moderator';
 
 export interface GroundingMetadata {
-  searchEntryPoint?: { renderedContent: string };
+  searchEntryPoint?: { renderedContent?: string };
   groundingChunks?: Array<{
-    web?: { uri: string; title: string };
+    web?: { uri?: string; title?: string };
   }>;
 }
 

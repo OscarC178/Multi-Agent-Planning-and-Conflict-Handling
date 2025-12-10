@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Shield, BrainCircuit, Target, ArrowRight, Layers, FileText, Users, MessageSquareText, FileBarChart, ClipboardList, CheckSquare } from 'lucide-react';
+import { Shield, BrainCircuit, Target, ArrowRight, Layers, FileText, Users, MessageSquareText, FileBarChart, ClipboardList, CheckSquare, Lock } from 'lucide-react';
 
 interface LandingPageProps {
   onStart: () => void;
@@ -173,12 +174,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart, onAdmin }) => {
           <p className="text-sm">
             Secure. Private. Local storage only.
           </p>
-          <button 
-            onClick={onAdmin} 
-            className="text-xs hover:text-white transition-colors opacity-60 hover:opacity-100"
-          >
-            Admin Dashboard
-          </button>
+          <div className="flex items-center gap-2">
+             <Lock size={12} className="opacity-50" />
+             <button 
+                onClick={onAdmin} 
+                className="text-xs hover:text-white transition-colors opacity-60 hover:opacity-100"
+             >
+               Admin Access
+             </button>
+          </div>
         </div>
       </div>
     </div>

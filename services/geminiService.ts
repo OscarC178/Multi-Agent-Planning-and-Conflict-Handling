@@ -107,7 +107,14 @@ export const generateProponentResponse = async (
     - If the Moderator has pointed out a fact, accept it and adjust.
     - If the Opponent asks for evidence, try to provide logical proofs, industry standards, or hypothetical user scenarios that match your persona.
 
-    If this is the first turn, provide a compelling opening statement (max 150 words).
+    FORMATTING RULES:
+    - Use Markdown formatting for readability.
+    - Use **Bold** for emphasis on key points or stats.
+    - Use Bullet Points (- item) for lists or steps.
+    - Keep paragraphs short (3-4 sentences max).
+    - Limit total length to 200 words.
+
+    If this is the first turn, provide a compelling opening statement.
     If replying to the Opponent, address their concerns directly but steer back to value.
   `;
 
@@ -185,7 +192,12 @@ export const generateOpponentResponse = async (
     3. If Agent A makes a bold claim, ask: "Do you have data to back that up?" or "Has this been tested?"
     4. If the User (Admin) interjects, respect their constraint but find new risks within that constraint.
     5. ${toneInstruction}
-    6. Keep it under 150 words.
+    
+    FORMATTING RULES:
+    - Use Markdown formatting.
+    - Use **Bold** for specific objections (e.g., **The Budget Issue:**).
+    - Use Bullet Points for lists of demands.
+    - Keep response under 150 words.
   `;
 
   if (persona.id === 'stubborn_toddler') {
@@ -242,6 +254,8 @@ export const generateModeratorIntervention = async (
     4. Only intervene if you have < 70% confidence in a claim's accuracy or if the debate is going in circles.
     5. If you intervene, keep it short (max 50 words), cite a source if possible, and steer the debate.
     6. If no intervention is needed, output EXACTLY: "NO_INTERVENTION".
+
+    Formatting: Use **Bold** for the verdict (e.g., **Fact Check:**).
   `;
 
   const conversationText = history.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
